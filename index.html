@@ -14,7 +14,7 @@
       overflow: hidden;
     }
 
-    /* BULLETPROOF PURE CSS LOADING SCREEN OVERLAY */
+    /* PURE CSS LOADING SCREEN OVERLAY */
     #loading-screen {
       position: fixed;
       top: 0;
@@ -29,8 +29,6 @@
       justify-content: flex-start;
       padding-top: 15vh;
       box-sizing: border-box;
-      
-      /* Fades out and vanishes completely from view automatically after 10s */
       animation: fadeOutLoader 0.5s ease forwards 10s;
     }
 
@@ -78,7 +76,7 @@
       100% { width: 100%; }
     }
 
-    /* GEOMETRY DASH WAVE SCREEN STYLES */
+    /* ARCADE ARENA SCREEN STYLES */
     #wave-arena {
       width: 100vw;
       height: 100vh;
@@ -108,7 +106,7 @@
 </head>
 <body>
 
-  <!-- 10-Second Intro Loading Screen (CSS Automated) -->
+  <!-- 10-Second Intro Loading Screen -->
   <div id="loading-screen">
     <div id="loading-title">chudometry dash wave</div>
     <div id="loading-credit">made by Herkus</div>
@@ -117,10 +115,10 @@
     </div>
   </div>
 
-  <!-- Geometry Dash Wave Game Layout Arena -->
+  <!-- Game Arena -->
   <div id="wave-arena">
     <div class="wave-title">CHUD WAVE</div>
-    <p id="instruction-text" style="color: #aaa; margin: 0 0 15px 0; text-align: center; padding: 0 10px; font-weight: bold;">
+    <p id="instruction-text" style="color: #4fefb3; margin: 0 0 15px 0; text-align: center; padding: 0 10px; font-weight: bold;">
       CLICK OR TOUCH ANYWHERE TO START GAME
     </p>
     <canvas id="wave-canvas" width="800" height="400"></canvas>
@@ -131,44 +129,52 @@
     const ctx = canvas.getContext('2d');
     const instructionText = document.getElementById('instruction-text');
 
-    // Safe Global Image Verification
+    // Safe Image Setup
     const chudImage = new Image();
     let imageLoaded = false;
     chudImage.onload = () => { imageLoaded = true; };
     chudImage.src = 'chud.jpg';
 
-    // Game states
+    // Game Core State Management Flags
     let loadingScreenActive = true;
     let gameStarted = false;
     let isWaveGameOver = false;
 
-    // Player position properties
+    // Player Configuration parameters
     let playerX = 100;
     let playerY = canvas.height / 2;
     const playerSize = 35; 
     let isClicking = false;
     const verticalSpeed = 5;
 
-    // Obstacle tracks array lists
+    // Spikes/Obstacles parameters
     let obstacles = [];
     let gameFrame = 0;
     let waveScore = 0;
 
-    // Turn off loading barrier state flags after exactly 10 seconds
+    // Unlock logic after loading screen finishes animation duration
     setTimeout(() => {
       loadingScreenActive = false;
     }, 10000);
 
-    // Unified Input Controller handler
-    function handleInputStart() {
-      // Ignore clicks if the loading overlay is still visually running
+    // Fixed Action Controller Handler
+    function handleInputStart(e) {
       if (loadingScreenActive) return;
 
-      if (!gameStarted) {
+      // If the player crashed or hasn't started yet, reset configurations clean
+      if (!gameStarted || isWaveGameOver) {
+        obstacles = [];
+        waveScore = 0;
+        playerY = canvas.height / 2;
+        gameFrame = 0;
+        isWaveGameOver = false;
         gameStarted = true;
+        
         instructionText.innerText = "HOLD CLICK / TOUCH to fly UP. RELEASE to dive DOWN. Dodge the spikes!";
         instructionText.style.color = "#aaa";
+        return;
       }
+      
       isClicking = true;
     }
 
@@ -176,7 +182,7 @@
       isClicking = false;
     }
 
-    // Input listeners
+    // Input Listeners Binds
     window.addEventListener('mousedown', handleInputStart);
     window.addEventListener('mouseup', handleInputEnd);
     window.addEventListener('touchstart', (e) => { 
@@ -198,8 +204,9 @@
       });
     }
 
+    // Engine Frame Renderer Loop Execution
     function waveLoop() {
-      // Clear screen background frame pass
+      // Clear Screen
       ctx.fillStyle = '#1f2833';
       ctx.fillRect(0, 0, canvas.width, canvas.height);
 
@@ -209,25 +216,23 @@
           spawnObstacle();
         }
 
-        // Move Player Wave movement physics
+        // Apply Flight Physics vectors
         if (isClicking) {
           playerY -= verticalSpeed; 
         } else {
           playerY += verticalSpeed; 
         }
 
-        // Boundary ceiling/floor collision detection
+        // Boundary check triggers crash
         if (playerY < 0 || playerY + playerSize > canvas.height) {
           triggerWaveCrash();
-          return;
         }
 
-        // Compute and move Spikes
+        // Advance and Render Spikes track bounds arrays
         for (let i = obstacles.length - 1; i >= 0; i--) {
           let o = obstacles[i];
           o.x -= 4.5; 
 
-          // Draw Spikes
           ctx.fillStyle = '#ff3366';
           ctx.beginPath();
           if (o.isCeiling) {
@@ -241,14 +246,13 @@
           }
           ctx.fill();
 
-          // Hitbox Collision testing calculations
+          // AABB Collision bounds matrix intersection calculation testing
           if (
             playerX < o.x + o.width &&
             playerX + playerSize > o.x &&
             ((o.isCeiling && playerY < o.height) || (!o.isCeiling && playerY + playerSize > o.y))
           ) {
             triggerWaveCrash();
-            return;
           }
 
           if (o.x + o.width < 0) {
@@ -256,8 +260,8 @@
             waveScore++;
           }
         }
-      } else if (!gameStarted) {
-        // Render welcoming grid details while sitting in standby state loop
+      } else {
+        // Draw decorative standby matrix guidelines grid if game isn't actively moving
         ctx.fillStyle = "rgba(79, 239, 179, 0.05)";
         for (let x = 0; x < canvas.width; x += 40) {
           ctx.fillRect(x, 0, 2, canvas.height);
@@ -267,19 +271,21 @@
         }
       }
 
-      // Render Player asset avatar
-      if (imageLoaded) {
-        ctx.drawImage(chudImage, playerX, playerY, playerSize, playerSize);
-      } else {
-        ctx.fillStyle = '#4fefb3';
-        ctx.beginPath();
-        ctx.moveTo(playerX + playerSize, playerY + playerSize / 2);
-        ctx.lineTo(playerX, playerY);
-        ctx.lineTo(playerX, playerY + playerSize);
-        ctx.fill();
+      // Draw active player character target avatar texture layers
+      if (!isWaveGameOver) {
+        if (imageLoaded) {
+          ctx.drawImage(chudImage, playerX, playerY, playerSize, playerSize);
+        } else {
+          ctx.fillStyle = '#4fefb3';
+          ctx.beginPath();
+          ctx.moveTo(playerX + playerSize, playerY + playerSize / 2);
+          ctx.lineTo(playerX, playerY);
+          ctx.lineTo(playerX, playerY + playerSize);
+          ctx.fill();
+        }
       }
 
-      // Display Dashboard Score panel
+      // Display Score dashboard overlay
       ctx.fillStyle = '#ffffff';
       ctx.font = 'bold 20px sans-serif';
       ctx.fillText(`Score: ${waveScore}`, 20, 35);
@@ -288,24 +294,16 @@
     }
 
     function triggerWaveCrash() {
+      if (isWaveGameOver) return; // Stop repeating calls
       isWaveGameOver = true;
-      alert(`Crash! Final Score: ${waveScore} points.`);
-      
-      // Reset variables back to initial state waiting for the next click
-      obstacles = [];
-      waveScore = 0;
-      playerY = canvas.height / 2;
-      gameFrame = 0;
-      gameStarted = false;
-      isWaveGameOver = false;
       isClicking = false;
       
-      // Update text banner back to ready status
-      instructionText.innerText = "CLICK OR TOUCH ANYWHERE TO RESTART GAME";
-      instructionText.style.color = "#4fefb3";
+      // Update typography banner status instantly
+      instructionText.innerText = "CRASHED! CLICK ANYWHERE TO RESTART GAME";
+      instructionText.style.color = "#ff3366";
     }
 
-    // Initialize animation execution engine
+    // Initialize animation execution engine loop iteration
     requestAnimationFrame(waveLoop);
   </script>
 </body>
