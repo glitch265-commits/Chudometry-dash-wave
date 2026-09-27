@@ -120,8 +120,8 @@
   <!-- Geometry Dash Wave Game Layout Arena -->
   <div id="wave-arena">
     <div class="wave-title">CHUD WAVE</div>
-    <p style="color: #aaa; margin: 0 0 15px 0; text-align: center; padding: 0 10px;">
-      HOLD CLICK / TOUCH to fly UP. RELEASE to dive DOWN. Dodge the spikes!
+    <p id="instruction-text" style="color: #aaa; margin: 0 0 15px 0; text-align: center; padding: 0 10px; font-weight: bold;">
+      CLICK OR TOUCH ANYWHERE TO START GAME
     </p>
     <canvas id="wave-canvas" width="800" height="400"></canvas>
   </div>
@@ -129,6 +129,7 @@
   <script>
     const canvas = document.getElementById('wave-canvas');
     const ctx = canvas.getContext('2d');
+    const instructionText = document.getElementById('instruction-text');
 
     // Safe Global Image Verification
     const chudImage = new Image();
@@ -136,10 +137,15 @@
     chudImage.onload = () => { imageLoaded = true; };
     chudImage.src = 'chud.jpg';
 
+    // Game states
+    let loadingScreenActive = true;
+    let gameStarted = false;
+    let isWaveGameOver = false;
+
     // Player position properties
     let playerX = 100;
     let playerY = canvas.height / 2;
-    const playerSize = 35; // Size optimized for the chud image square
+    const playerSize = 35; 
     let isClicking = false;
     const verticalSpeed = 5;
 
@@ -147,17 +153,41 @@
     let obstacles = [];
     let gameFrame = 0;
     let waveScore = 0;
-    let isWaveGameOver = false;
 
-    // Control interaction maps
-    window.addEventListener('mousedown', () => { isClicking = true; });
-    window.addEventListener('mouseup', () => { isClicking = false; });
-    window.addEventListener('touchstart', (e) => { e.preventDefault(); isClicking = true; });
-    window.addEventListener('touchend', () => { isClicking = false; });
+    // Turn off loading barrier state flags after exactly 10 seconds
+    setTimeout(() => {
+      loadingScreenActive = false;
+    }, 10000);
+
+    // Unified Input Controller handler
+    function handleInputStart() {
+      // Ignore clicks if the loading overlay is still visually running
+      if (loadingScreenActive) return;
+
+      if (!gameStarted) {
+        gameStarted = true;
+        instructionText.innerText = "HOLD CLICK / TOUCH to fly UP. RELEASE to dive DOWN. Dodge the spikes!";
+        instructionText.style.color = "#aaa";
+      }
+      isClicking = true;
+    }
+
+    function handleInputEnd() {
+      isClicking = false;
+    }
+
+    // Input listeners
+    window.addEventListener('mousedown', handleInputStart);
+    window.addEventListener('mouseup', handleInputEnd);
+    window.addEventListener('touchstart', (e) => { 
+      e.preventDefault(); 
+      handleInputStart(); 
+    });
+    window.addEventListener('touchend', handleInputEnd);
 
     function spawnObstacle() {
       const isCeiling = Math.random() > 0.5;
-      const spikeHeight = Math.floor(Math.random() * 120) + 60; // Random spike heights
+      const spikeHeight = Math.floor(Math.random() * 120) + 60; 
       
       obstacles.push({
         x: canvas.width,
@@ -169,31 +199,75 @@
     }
 
     function waveLoop() {
-      if (isWaveGameOver) return;
-
-      gameFrame++;
-      if (gameFrame % 80 === 0) {
-        spawnObstacle();
-      }
-
-      // 1. Move Player Wave movement physics
-      if (isClicking) {
-        playerY -= verticalSpeed; // Fly up
-      } else {
-        playerY += verticalSpeed; // Fall down
-      }
-
-      // Boundary crash threshold testing 
-      if (playerY < 0 || playerY + playerSize > canvas.height) {
-        triggerWaveCrash();
-        return;
-      }
-
-      // Clear layout and redraw background
+      // Clear screen background frame pass
       ctx.fillStyle = '#1f2833';
       ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-      // 2. Render Player (Draw chud.jpg if verified, draw cyan triangle if missing)
+      if (gameStarted && !isWaveGameOver) {
+        gameFrame++;
+        if (gameFrame % 80 === 0) {
+          spawnObstacle();
+        }
+
+        // Move Player Wave movement physics
+        if (isClicking) {
+          playerY -= verticalSpeed; 
+        } else {
+          playerY += verticalSpeed; 
+        }
+
+        // Boundary ceiling/floor collision detection
+        if (playerY < 0 || playerY + playerSize > canvas.height) {
+          triggerWaveCrash();
+          return;
+        }
+
+        // Compute and move Spikes
+        for (let i = obstacles.length - 1; i >= 0; i--) {
+          let o = obstacles[i];
+          o.x -= 4.5; 
+
+          // Draw Spikes
+          ctx.fillStyle = '#ff3366';
+          ctx.beginPath();
+          if (o.isCeiling) {
+            ctx.moveTo(o.x, 0);
+            ctx.lineTo(o.x + o.width, 0);
+            ctx.lineTo(o.x + o.width / 2, o.height);
+          } else {
+            ctx.moveTo(o.x, canvas.height);
+            ctx.lineTo(o.x + o.width, canvas.height);
+            ctx.lineTo(o.x + o.width / 2, o.y);
+          }
+          ctx.fill();
+
+          // Hitbox Collision testing calculations
+          if (
+            playerX < o.x + o.width &&
+            playerX + playerSize > o.x &&
+            ((o.isCeiling && playerY < o.height) || (!o.isCeiling && playerY + playerSize > o.y))
+          ) {
+            triggerWaveCrash();
+            return;
+          }
+
+          if (o.x + o.width < 0) {
+            obstacles.splice(i, 1);
+            waveScore++;
+          }
+        }
+      } else if (!gameStarted) {
+        // Render welcoming grid details while sitting in standby state loop
+        ctx.fillStyle = "rgba(79, 239, 179, 0.05)";
+        for (let x = 0; x < canvas.width; x += 40) {
+          ctx.fillRect(x, 0, 2, canvas.height);
+        }
+        for (let y = 0; y < canvas.height; y += 40) {
+          ctx.fillRect(0, y, canvas.width, 2);
+        }
+      }
+
+      // Render Player asset avatar
       if (imageLoaded) {
         ctx.drawImage(chudImage, playerX, playerY, playerSize, playerSize);
       } else {
@@ -205,42 +279,7 @@
         ctx.fill();
       }
 
-      // 3. Render and advance Spikes
-      for (let i = obstacles.length - 1; i >= 0; i--) {
-        let o = obstacles[i];
-        o.x -= 4.5; // Controls scroll speed of spikes moving left
-
-        ctx.fillStyle = '#ff3366';
-        ctx.beginPath();
-        if (o.isCeiling) {
-          ctx.moveTo(o.x, 0);
-          ctx.lineTo(o.x + o.width, 0);
-          ctx.lineTo(o.x + o.width / 2, o.height);
-        } else {
-          ctx.moveTo(o.x, canvas.height);
-          ctx.lineTo(o.x + o.width, canvas.height);
-          ctx.lineTo(o.x + o.width / 2, o.y);
-        }
-        ctx.fill();
-
-        // Hitbox Collision testing calculations
-        if (
-          playerX < o.x + o.width &&
-          playerX + playerSize > o.x &&
-          ((o.isCeiling && playerY < o.height) || (!o.isCeiling && playerY + playerSize > o.y))
-        ) {
-          triggerWaveCrash();
-          return;
-        }
-
-        // Clean out array data once spikes exit viewport
-        if (o.x + o.width < 0) {
-          obstacles.splice(i, 1);
-          waveScore++;
-        }
-      }
-
-      // Render Dashboard Score panel
+      // Display Dashboard Score panel
       ctx.fillStyle = '#ffffff';
       ctx.font = 'bold 20px sans-serif';
       ctx.fillText(`Score: ${waveScore}`, 20, 35);
@@ -250,20 +289,24 @@
 
     function triggerWaveCrash() {
       isWaveGameOver = true;
-      alert(`Crash! Final Score: ${waveScore} points.\nClick OK to retry!`);
+      alert(`Crash! Final Score: ${waveScore} points.`);
       
-      // Instant clear parameter structures for smooth game loops loop restart
+      // Reset variables back to initial state waiting for the next click
       obstacles = [];
       waveScore = 0;
       playerY = canvas.height / 2;
       gameFrame = 0;
+      gameStarted = false;
       isWaveGameOver = false;
-      requestAnimationFrame(waveLoop);
+      isClicking = false;
+      
+      // Update text banner back to ready status
+      instructionText.innerText = "CLICK OR TOUCH ANYWHERE TO RESTART GAME";
+      instructionText.style.color = "#4fefb3";
     }
 
-    // Safely fire and keep animation frame intervals loop moving automatically
+    // Initialize animation execution engine
     requestAnimationFrame(waveLoop);
   </script>
 </body>
 </html>
-
