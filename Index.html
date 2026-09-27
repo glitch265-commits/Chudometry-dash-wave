@@ -1,1 +1,269 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Chudometry Dash Wave</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      background-color: #0b0c10;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      color: white;
+      overflow: hidden;
+    }
+
+    /* BULLETPROOF PURE CSS LOADING SCREEN OVERLAY */
+    #loading-screen {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background-color: #0b0f19;
+      z-index: 9999;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-start;
+      padding-top: 15vh;
+      box-sizing: border-box;
+      
+      /* Fades out and vanishes completely from view automatically after 10s */
+      animation: fadeOutLoader 0.5s ease forwards 10s;
+    }
+
+    @keyframes fadeOutLoader {
+      0% { opacity: 1; visibility: visible; }
+      100% { opacity: 0; visibility: hidden; pointer-events: none; }
+    }
+
+    #loading-title {
+      font-size: 3rem;
+      font-weight: bold;
+      color: #4fefb3;
+      letter-spacing: 3px;
+      margin: 0;
+      text-transform: uppercase;
+      text-shadow: 0 0 15px rgba(79, 239, 179, 0.4);
+      text-align: center;
+    }
+
+    #loading-credit {
+      font-size: 1.2rem;
+      color: #888;
+      margin: 10px 0 30px 0;
+      letter-spacing: 1px;
+    }
+
+    .progress-container {
+      width: 300px;
+      height: 12px;
+      background-color: #222;
+      border-radius: 6px;
+      border: 2px solid #4fefb333;
+      overflow: hidden;
+    }
+
+    .progress-bar {
+      width: 0%;
+      height: 100%;
+      background-color: #4fefb3;
+      animation: loadProgress 10s linear forwards;
+    }
+
+    @keyframes loadProgress {
+      0% { width: 0%; }
+      100% { width: 100%; }
+    }
+
+    /* GEOMETRY DASH WAVE SCREEN STYLES */
+    #wave-arena {
+      width: 100vw;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+    }
+
+    #wave-canvas {
+      background-color: #1f2833;
+      border: 4px solid #4fefb3;
+      box-shadow: 0 0 30px rgba(79, 239, 179, 0.3);
+      max-width: 95vw;
+      max-height: 70vh;
+    }
+
+    .wave-title {
+      font-size: 2.5rem;
+      font-weight: bold;
+      color: #4fefb3;
+      margin-bottom: 5px;
+      letter-spacing: 2px;
+      text-shadow: 0 0 10px rgba(79, 239, 179, 0.2);
+    }
+  </style>
+</head>
+<body>
+
+  <!-- 10-Second Intro Loading Screen (CSS Automated) -->
+  <div id="loading-screen">
+    <div id="loading-title">chudometry dash wave</div>
+    <div id="loading-credit">made by Herkus</div>
+    <div class="progress-container">
+      <div class="progress-bar"></div>
+    </div>
+  </div>
+
+  <!-- Geometry Dash Wave Game Layout Arena -->
+  <div id="wave-arena">
+    <div class="wave-title">CHUD WAVE</div>
+    <p style="color: #aaa; margin: 0 0 15px 0; text-align: center; padding: 0 10px;">
+      HOLD CLICK / TOUCH to fly UP. RELEASE to dive DOWN. Dodge the spikes!
+    </p>
+    <canvas id="wave-canvas" width="800" height="400"></canvas>
+  </div>
+
+  <script>
+    const canvas = document.getElementById('wave-canvas');
+    const ctx = canvas.getContext('2d');
+
+    // Safe Global Image Verification
+    const chudImage = new Image();
+    let imageLoaded = false;
+    chudImage.onload = () => { imageLoaded = true; };
+    chudImage.src = 'chud.jpg';
+
+    // Player position properties
+    let playerX = 100;
+    let playerY = canvas.height / 2;
+    const playerSize = 35; // Size optimized for the chud image square
+    let isClicking = false;
+    const verticalSpeed = 5;
+
+    // Obstacle tracks array lists
+    let obstacles = [];
+    let gameFrame = 0;
+    let waveScore = 0;
+    let isWaveGameOver = false;
+
+    // Control interaction maps
+    window.addEventListener('mousedown', () => { isClicking = true; });
+    window.addEventListener('mouseup', () => { isClicking = false; });
+    window.addEventListener('touchstart', (e) => { e.preventDefault(); isClicking = true; });
+    window.addEventListener('touchend', () => { isClicking = false; });
+
+    function spawnObstacle() {
+      const isCeiling = Math.random() > 0.5;
+      const spikeHeight = Math.floor(Math.random() * 120) + 60; // Random spike heights
+      
+      obstacles.push({
+        x: canvas.width,
+        y: isCeiling ? 0 : canvas.height - spikeHeight,
+        width: 45,
+        height: spikeHeight,
+        isCeiling: isCeiling
+      });
+    }
+
+    function waveLoop() {
+      if (isWaveGameOver) return;
+
+      gameFrame++;
+      if (gameFrame % 80 === 0) {
+        spawnObstacle();
+      }
+
+      // 1. Move Player Wave movement physics
+      if (isClicking) {
+        playerY -= verticalSpeed; // Fly up
+      } else {
+        playerY += verticalSpeed; // Fall down
+      }
+
+      // Boundary crash threshold testing 
+      if (playerY < 0 || playerY + playerSize > canvas.height) {
+        triggerWaveCrash();
+        return;
+      }
+
+      // Clear layout and redraw background
+      ctx.fillStyle = '#1f2833';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      // 2. Render Player (Draw chud.jpg if verified, draw cyan triangle if missing)
+      if (imageLoaded) {
+        ctx.drawImage(chudImage, playerX, playerY, playerSize, playerSize);
+      } else {
+        ctx.fillStyle = '#4fefb3';
+        ctx.beginPath();
+        ctx.moveTo(playerX + playerSize, playerY + playerSize / 2);
+        ctx.lineTo(playerX, playerY);
+        ctx.lineTo(playerX, playerY + playerSize);
+        ctx.fill();
+      }
+
+      // 3. Render and advance Spikes
+      for (let i = obstacles.length - 1; i >= 0; i--) {
+        let o = obstacles[i];
+        o.x -= 4.5; // Controls scroll speed of spikes moving left
+
+        ctx.fillStyle = '#ff3366';
+        ctx.beginPath();
+        if (o.isCeiling) {
+          ctx.moveTo(o.x, 0);
+          ctx.lineTo(o.x + o.width, 0);
+          ctx.lineTo(o.x + o.width / 2, o.height);
+        } else {
+          ctx.moveTo(o.x, canvas.height);
+          ctx.lineTo(o.x + o.width, canvas.height);
+          ctx.lineTo(o.x + o.width / 2, o.y);
+        }
+        ctx.fill();
+
+        // Hitbox Collision testing calculations
+        if (
+          playerX < o.x + o.width &&
+          playerX + playerSize > o.x &&
+          ((o.isCeiling && playerY < o.height) || (!o.isCeiling && playerY + playerSize > o.y))
+        ) {
+          triggerWaveCrash();
+          return;
+        }
+
+        // Clean out array data once spikes exit viewport
+        if (o.x + o.width < 0) {
+          obstacles.splice(i, 1);
+          waveScore++;
+        }
+      }
+
+      // Render Dashboard Score panel
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 20px sans-serif';
+      ctx.fillText(`Score: ${waveScore}`, 20, 35);
+
+      requestAnimationFrame(waveLoop);
+    }
+
+    function triggerWaveCrash() {
+      isWaveGameOver = true;
+      alert(`Crash! Final Score: ${waveScore} points.\nClick OK to retry!`);
+      
+      // Instant clear parameter structures for smooth game loops loop restart
+      obstacles = [];
+      waveScore = 0;
+      playerY = canvas.height / 2;
+      gameFrame = 0;
+      isWaveGameOver = false;
+      requestAnimationFrame(waveLoop);
+    }
+
+    // Safely fire and keep animation frame intervals loop moving automatically
+    requestAnimationFrame(waveLoop);
+  </script>
+</body>
+</html>
 
